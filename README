@@ -1,0 +1,14 @@
+This directory contains the CPDFS (Check-Pointing Distributed File System).
+
+written by Miki Horiuchi <mikity@logos.ic.i.u-tokyo.ac.jp>
+(3 Jan. 2012)
+
+CPDFS is a distributed file system that enable users to manage files with 
+version control automatically. 
+
+== INSTALL ==
+
+== HOW TO USE ==
+[servers]
+
+[clients]
