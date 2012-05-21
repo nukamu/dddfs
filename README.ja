@@ -1,0 +1,43 @@
+このディレクトリにはDDDFSという名前の分散ファイルシステムのコードが含まれている．
+
+作成者：堀内美希 <mikity@logos.ic.i.u-tokyo.ac.jp>
+作成日時：2012年3月13日
+最終更新日時：2012年5月22日
+
+== インストール ==
+FUSE, python-fuseをインストールする必要がある．
+両者ともとりあえずdebian系なら簡単に
+ # apt-get install fuse
+ # apt-get install python-fuse
+できる．
+cf. FUSE: http://fuse.sourceforge.net/
+    python-fuse: http://pypi.python.org/pypi/fuse-python
+
+次に，このディレクトリ/binにPATHを通す，
+もしくはPATHの通った場所に，
+このディレクトリ/bin/dddfsのシンボリックリンクを作成する，と準備完了．
+
+== 使い方 ==
+[メタデータサーバ]
+ % dddfs --meta [metaデータを管理するためのdir]
+メタデータサーバ用デーモンが立ち上がる．
+
+[データサーバ]
+ % dddfs --server --meta_addr [メタデータサーバのhostname] [データを管理するためのdir]
+データサーバ用デーモンが立ち上がる．
+
+[クライアント]
+ % dddfs --client --meta_addr [メタデータサーバのhostname] [mount dir] ([fuse options])
+dddfs用デーモンが立ち上がって，mount dir以下のアクセスをハンドルする．
+
+** important **
+上記コマンドで各コンポーネントが立ち上がるが，
+データサーバ，クライアント用プログラムは，メタデータサーバ立ち上げの後に行わなければならない．
+
+== アンマウント ==
+DDDFSをマウントしたディレクトリをアンマウントするには，
+ $ fusermount -u [mount dir]
+というコマンドを打つ必要がある．
+その際このディレクトリがいずれかのプロセスからアクセスしている状態だと，
+device is busyでエラーになることがあるので注意．
+メタデータサーバのデーモンと，データサーバのデーモンは自分でctrl-cもしくは，killする必要がある．
