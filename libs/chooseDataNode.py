@@ -1,5 +1,6 @@
 FETCH_COST_ULIMIT = 9999999999
 
+
 class IntermediateNodeInfo(NodeInfo):
     def __init__(IP, cluster, ):
         NodeInfo(IP, cluster)
@@ -26,6 +27,7 @@ def _ChooseBestDataNode(intermediateNodeToFetchTargetFile,
             minCostIdx = idx
     return dataNodeCandidates[minCostIdx]
 
+
 def ChooseDataNode(intermediateNodeToFetchTargetFile, targetFile, clustersInfo):
     """
     @thread-safty
@@ -50,3 +52,4 @@ def ChooseDataNode(intermediateNodeToFetchTargetFile, targetFile, clustersInfo):
     bestDataNodeInfo = _ChooseBestDataNode(intermediateNodeToFetchTargetFile,
                                            currentLocations, clustersInfo)
     return bestDataNodeInfo
+

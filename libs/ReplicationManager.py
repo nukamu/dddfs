@@ -1,4 +1,4 @@
-import threa
+import thread
 import datetime
 
 
@@ -57,4 +57,4 @@ class ReplicationManager(object):
         """
         self._IncReplOpenCnt(f)
 
-        # TODO: Determin replication request from location(f) and reqQ(f)
+        # TODO: Determine replication request from location(f) and reqQ(f)
