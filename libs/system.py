@@ -1,13 +1,12 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, os.path
-from fuse import Fuse
-import fuse
-fuse.fuse_python_api = (0, 2)
+import os
+import os.path
 
 import logging
 import time
+
 
 class Singleton(type):
     """Singleton class implementation from
@@ -42,7 +41,7 @@ class DRDFSLog(object):
         >>> assert(i1 == i2)
         """
         pass
-    
+
     @staticmethod
     def init(log_type, output_level):
         """Initialize logger.
@@ -63,8 +62,8 @@ class DRDFSLog(object):
         else:
             raise
         if os.access(logdir, os.W_OK) == False:
-            print "Directory for log is permitted to write."
-            raise Exception
+            # TODO: create a directory if the target directory does not exist
+            raise Exception("Directory for log (%s) is not permitted to write." % (logdir))
         logging.basicConfig(filename=instance.logfile, 
                             level=output_level,
                             format='[%(asctime)s] %(message)s',
@@ -74,11 +73,11 @@ class DRDFSLog(object):
     @staticmethod
     def debug(msg):
         logging.debug(msg)
-    
+
     @staticmethod
     def info(msg):
         logging.info(msg)
-    
+
     @staticmethod
     def warning(msg):
         logging.warning(msg)
@@ -90,11 +89,6 @@ class DRDFSLog(object):
     @staticmethod
     def critical(msg):
         logging.critical(msg)
-
-def usagestr():
-    """Usage string.
-    """
-    return ""+ fuse.Fuse.fusage
 
 
 if __name__ == "__main__":

@@ -3,8 +3,10 @@
 
 from __future__ import with_statement
 
-import socket, select
-import string, cStringIO
+import socket
+import select
+import string
+import cStringIO
 import cPickle
 import threading
 import sys, os
@@ -30,7 +32,7 @@ class DRDFSChannel(object):
 
     def recvall(self, length):
         """recv all data whose length is defined
-        
+
         This function may return less data than required.
         (when connection closed)
         @param length length of required data
@@ -50,7 +52,7 @@ class DRDFSChannel(object):
 
     def _recvall(self, length):
         """recv all data whose length is defined
-        
+
         This function may return less data than required.
         (when connection closed)
         @param length length of required data
@@ -98,7 +100,7 @@ class DRDFSChannel(object):
                 res_buf.write(buf[:-3])
         ret = cPickle.loads(res_buf.getvalue())
         return ret
-    
+
     def _recv_header(self, ):
         res_buf = cStringIO.StringIO()
         buf = self._recvall(conf.bufsize)
