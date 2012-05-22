@@ -63,8 +63,8 @@ class DRDFSLog(object):
         else:
             raise
         if os.access(logdir, os.W_OK) == False:
-            print "Directory for log is permitted to write."
-            raise Exception
+            # TODO: create a directory if the target directory does not exist
+            raise Exception("Directory for log (%s) is not permitted to write." % (logdir))
         logging.basicConfig(filename=instance.logfile, 
                             level=output_level,
                             format='[%(asctime)s] %(message)s',
