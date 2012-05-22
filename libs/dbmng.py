@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import sqlite3
-import os, os.path
+import os
+import os.path
 import errno
 
 class DRDFSMetaDB(object):
@@ -32,5 +33,4 @@ class DRDFSMetaDB(object):
         dist_path TEXT
         )
         """)
-
 
