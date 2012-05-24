@@ -8,6 +8,14 @@ import logging
 import time
 
 
+class DirectoryPermissionException(Exception):
+    pass
+
+
+class NotDirectoryException(Exception):
+    pass
+
+
 class Singleton(type):
     """Singleton class implementation from
     http://code.activestate.com/recipes/412551/
@@ -61,14 +69,17 @@ class DRDFSLog(object):
             instance.logfile = os.path.join(logdir, "data.log")
         else:
             raise
+        if not os.path.exists(logdir):
+            os.mkdir(logdir)
+        if not os.path.isdir(logdir):  # May be a file, symlink, or another
+            raise NotDirectoryException(logdir)
         if os.access(logdir, os.W_OK) == False:
-            # TODO: create a directory if the target directory does not exist
-            raise Exception("Directory for log (%s) is not permitted to write." % (logdir))
+            raise DirectoryPermissionException(logdir)
         logging.basicConfig(filename=instance.logfile, 
                             level=output_level,
                             format='[%(asctime)s] %(message)s',
                             datefmt='%m/%d/%Y %I:%M:%S')
-        logging.info("Logging Start")    
+        logging.info("Logging Start")
 
     @staticmethod
     def debug(msg):
