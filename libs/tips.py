@@ -26,6 +26,7 @@ class DRDFSStat(fuse.Stat):
             try:
                 setattr(self, attr, 0)
             except AttributeError, e:
+                # FIXME
                 print e
                 pass
 
@@ -34,6 +35,7 @@ class DRDFSStat(fuse.Stat):
             try:
                 setattr(self, attr, getattr(st, attr))
             except AttributeError, e:
+                # FIXME
                 print e
                 pass
 
@@ -44,6 +46,7 @@ class DRDFSStat(fuse.Stat):
         s = ", ".join("%s=%d" % (attr, getattr(self, attr))
                       for attr in self.attrs)
         return "<DRDFSStat %s>" % (s,)
+
 
 class DRDFSBlock(object):
     """This is the class of block information used in Mogami.
@@ -56,3 +59,4 @@ class DRDFSBlock(object):
         2: exist
         """
         self.buf = ""
+
