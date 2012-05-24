@@ -20,11 +20,12 @@ import atexit     # for leave from the list of data servers
 class DRDFSData(object):
     """This is the class for DRDFS's data servers
     """
-    def __init__(self, metaaddr, rootpath):
+    def __init__(self, metaaddr, rootpath, dddfs_dir):
         """initialize DRDFS's data server daemon
         """
         self.metaaddr = metaaddr
         self.rootpath = os.path.abspath(rootpath)
+        self.dddfs_dir = dddfs_dir
 
         """Check directory for data files.
         """
@@ -42,7 +43,10 @@ class DRDFSData(object):
         DRDFSLog.debug("Success in creating connection to metadata server")
         senddata = ['dataadd', self.rootpath]
         
-        mchannel.send_header(senddata)
+        ans = mchannel.send_recv_flow(senddata)
+        if ans == -1:
+            e = system.DDDFSSystemError()
+            raise e
         mchannel.brk_channel()
 
         DRDFSLog.debug("Init complete!!")        
@@ -302,8 +306,8 @@ class DRDFSData(object):
             print "finish create replication and exit"
             sys.exit()
 
-def main(meta_addr, dir_path):
-    data = DRDFSData(meta_addr, dir_path)
+def main(meta_addr, dir_path, dddfs_dir):
+    data = DRDFSData(meta_addr, dir_path, dddfs_dir)
     atexit.register(data.finalize)
     data.run()
 

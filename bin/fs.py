@@ -194,6 +194,7 @@ class DRDFS(Fuse):
             self.d_channel = channel.DRDFSChannel()
             self.d_channel.connect(self.dist, conf.dataport)
 
+            print "nya"
             senddata = ['open', path_data, flags, mode]
             ans = self.d_channel.send_recv_flow(senddata)
             DRDFSLog.debug("open ans (from data)" + str(ans))

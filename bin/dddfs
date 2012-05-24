@@ -12,7 +12,6 @@ def main():
     import os
 
     dddfs_dir = commands.getoutput("which dddfs")
-    print "dddfs_dir = %s" % dddfs_dir
     if os.path.islink(dddfs_dir):
         dddfs_dir = os.readlink(dddfs_dir)
     dddfs_dir = dddfs_dir.replace('/bin/dddfs', '')
@@ -26,21 +25,30 @@ def main():
                       const=2, dest="mode")
     parser.add_option("--meta_addr", dest="meta_addr")
 
+    # options (not required)
+    parser.add_option("-f", action="store_true", dest="f", default=False)
+    parser.add_option("-d", action="store_true", dest="debug", default=False)
+
+
     (options, args) = parser.parse_args()
     if len(args) != 1:
         parser.error("required args are not defined: directory")
 
     if options.mode == 0: # case of meta
         import meta
-        meta.main(args[0])
+        meta.main(args[0], dddfs_dir)
     elif options.mode == 1: # case of server
         import data
-        data.main(options.meta_addr, args[0])
+        data.main(options.meta_addr, args[0], dddfs_dir)
     else: # case of client
         mount_dir = os.path.join(os.getcwd(), args[0])
-
-        #os.chdir(os.path.join(dddfs_dir, 'bin'))
-        os.system("python fs.py %s %s" % (options.meta_addr, mount_dir))
+        os.chdir(os.path.join(dddfs_dir, 'bin'))
+        if options.debug == True:
+            os.system("python fs.py %s %s -d" % (options.meta_addr, mount_dir))
+        elif options.f == True:
+            os.system("python fs.py %s %s -f" % (options.meta_addr, mount_dir))
+        else:
+            os.system("python fs.py %s %s" % (options.meta_addr, mount_dir))
 
 if __name__ == '__main__':
     main()

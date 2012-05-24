@@ -10,6 +10,8 @@ fuse.fuse_python_api = (0, 2)
 import logging
 import time
 
+class DDDFSSystemException(Exception):
+    pass
 
 class DirectoryPermissionException(Exception):
     pass

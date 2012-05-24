@@ -8,7 +8,7 @@ sys.path.append(os.pardir)
 
 # dddfs's original modules
 from libs import channel, dbmng, system, cluster
-from libs import ReplicationManager
+from libs import ReplicationManager, chooseDataNode
 from conf import conf
 from libs.system import DRDFSLog
 
@@ -22,8 +22,9 @@ import random, string, re, time
 class DRDFSMeta(object):
     """Class for DRDFS's meta data server
     """
-    def __init__(self, rootpath):
+    def __init__(self, rootpath, dddfs_dir):
         self.rootpath = os.path.abspath(rootpath)
+        self.dddfs_dir = dddfs_dir
         
         """Check directory for meta data files.
         """
@@ -37,8 +38,9 @@ class DRDFSMeta(object):
 
         # for replication
         if conf.replication == True:
-            self.cluster_info = cluster.DDDFSNodesInfo(conf.cluster_conf_path)
             self.repl_info = ReplicationManager.ReplicationManager()
+        self.cluster_info = cluster.DDDFSNodesInfo(
+            os.path.join(self.dddfs_dir, 'conf', conf.cluster_conf_file))
 
         self.delfiles_dict = {}
         self.delfiles_dict_lock = threading.Lock()
@@ -166,7 +168,7 @@ class DRDFSMeta(object):
                     if ans == 0:
                         # add new location of the file
                         f = open(org_filename, 'a')
-                        buf = "%s,%s,%d,%s\n" % (new_dist, dist_filename, size, org_dist)
+                        buf = "%s,%s,%d,%s\n" % (new_dist, org_filename, size, org_dist)
                         f.write(buf)
                         f.close()
                         print "*** add replication ****"
@@ -297,7 +299,8 @@ class DRDFSMeta(object):
         def data_add(self, IP):
             """
             """
-            self.cluster_info.add_node(IP, cluster.NodeInfo.TYPE_DATA)
+            ret = self.cluster_info.add_node(IP, cluster.NodeInfo.TYPE_DATA)
+            self.c_channel.send_header(ret)
             self.datalist.append(IP)
 
             print "add data server IP:", IP
@@ -502,30 +505,33 @@ class DRDFSMeta(object):
                         data_buf += buf
                     lines = data_buf.rsplit('\n')
                     data_nodes = []
-                    file_dict = {}
+                    filename = ''
                     for line in lines:
                         l = line.rsplit(',')
-                        print l
-                        if len(l) < 2:
+                        if len(l) < 3:
                             break
-                        data_nodes.append(l[0])
-                        file_dict[l[0]] = l[1]
+                        data_nodes.append(l[0])  # e.g.) "127.0.0.1"
+                        filename = l[1]
                         size = string.atol(l[2])
-                    print lines
-                    senddata = [0, data_nodes[0], fd, size, file_dict[data_nodes[0]]]
+                    data_num = len(lines)
+                    peername = self.c_channel.sock.getpeername()
 
-                    repl_dict = self.repl_info.ReplInfoWhenOpen(path, data_nodes, self.cluster_info)
-                    
+                    selected_ip = chooseDataNode.ChooseDataNode(peername, data_nodes, self.cluster_info)
+                    senddata = [0, selected_ip, fd, size, filename]
+                except os.error, e:
+                    DRDFSLog.debug("!!find the file but error for %s (%s)" % (path, e))
+                    senddata = [e.errno, 'null', 'null', 'null', 'null']
+                self.c_channel.send_header(senddata)
+
+                # do replication (if need)
+                repl_dict = self.repl_info.ReplInfoWhenOpen(path, peername, data_nodes, self.cluster_info)
+                if repl_dict != None:                   
                     # add a replication task
                     if conf.replication == True:
                         # select distination in replication
                         self.repq.put((repl_dict['from'], file_dict[data_nodes[0]], repl_dict['to'], path))
                         print "task ***"
 
-                except os.error, e:
-                    DRDFSLog.debug("!!find the file but error for %s (%s)" % (path, e))
-                    senddata = [e.errno, 'null', 'null', 'null', 'null']
-                self.c_channel.send_header(senddata)
 
             else:
                 """When the required file doesn't exist...
@@ -611,8 +617,8 @@ class DRDFSMeta(object):
             self.c_channel.send_header(senddata)
 
 
-def main(dir_path):
-    meta = DRDFSMeta(dir_path)
+def main(dir_path, dddfs_dir):
+    meta = DRDFSMeta(dir_path, dddfs_dir)
     meta.run()
 
 

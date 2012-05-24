@@ -26,9 +26,11 @@ class DRDFSChannel(object):
 
     def set_channel_from_sock(self, sock):
         self.sock = sock
+        self.peername = self.sock.getpeername()
 
     def connect(self, dist, port):
         self.sock.connect((dist, port))
+        self.peername = self.sock.getpeername()
 
     def recvall(self, length):
         """recv all data whose length is defined

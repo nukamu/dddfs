@@ -22,21 +22,26 @@ def _parse_cluster_config(config_path):
     cluster_name = ''
     while True:
         buf = f.readline()
+
         if buf == '':  # End of file
             break
-        elif buf[:1] == ' ':
-            buf = buf.lstrip(" ")
+        elif buf[:1] == '#': # Comment
+            continue
+        elif buf[:1] == ' ' or buf[:1] == '\t':
+            buf = buf.lstrip(' ')
+            buf = buf.lstrip('\t')
             if cluster_name != '':
                 try:
-                    ip = socket.gethostbyname(buf[:-1])
+                    host = buf.rstrip("\n")
+                    ip = socket.gethostbyname(host)
                     ret_cluster_dict[ip] = cluster_name
-                except Exception, e:
-                    pass
+                except socket.error, e:
+                    MogamiLog.error("We cannot resolve address of %s, so %s is not added to nodes." % (host, host))
             else:
                 DDDFSLog.error("** config file format is invalid **")
                 sys.exit(1)
         else:
-            cluster_name = buf[:-1]
+            cluster_name = buf.rstrip('\n')
     return ret_cluster_dict
 
 class NodeInfo(object):
@@ -61,9 +66,11 @@ class ClusterNodesInfo(object):
     def __init__(self, cluster):
         self.cluster = cluster
         self.ip_list = []
+        self.nodes_num = 0
 
     def add_node(self, ip):
         self.ip_list.append(ip)
+        self.nodes_num += 1
 
 class DDDFSNodesInfo(object):
     def __init__(self, config_path):
@@ -81,20 +88,27 @@ class DDDFSNodesInfo(object):
             """
             self.meta_ip = ip
         elif node_type == NodeInfo.TYPE_DATA:
-            node_info = DataNodeInfo(ip, self.cluster_dict[ip])
+            try:
+                cluster = self.cluster_dict[ip]
+            except KeyError, e:
+                return -1
+            node_info = DataNodeInfo(ip, cluster)
             self.data_ip_list.append(ip)
-            cluster = self.cluster_dict[ip]
             if not self.data_cluster_dict.has_key(cluster):
                 self.data_cluster_dict[cluster] = ClusterNodesInfo(cluster)
             self.data_cluster_dict[cluster].add_node(ip)
         else:
-            node_info = ClientNodeInfo(ip, self.cluster_dict[ip])
+            try:
+                cluster = self.cluster_dict[ip]
+            except KeyError, e:
+                return -1
+            node_info = ClientNodeInfo(ip, cluster)
             self.client_ip_list.append(ip)
-            cluster = self.cluster_dict[ip]
             if not self.client_cluster_dict.has_key(cluster):
                 self.client_cluster_dict[cluster] = ClusterNodesInfo(cluster)
             self.client_cluster_dict[cluster].add_node(ip)
 
+        return 0
 
     def choose_random_from_datanodes(self, remv_nodes):
         """choose one of data servers at random.
@@ -105,7 +119,8 @@ class DDDFSNodesInfo(object):
         for ip in self.data_ip_list:
             if ip not in remv_nodes:
                 candidates_list.append(ip)
-
+        if len(candidates_list) == 0:
+            return None
         return candidates_list[random.randint(0, len(candidates_list) - 1)]
 
     def choose_datanode_in_cluster(self, cluster, remv_nodes):
@@ -113,7 +128,9 @@ class DDDFSNodesInfo(object):
         for ip in self.data_cluster_dict[cluster].ip_list:
             if ip not in remv_nodes:
                 candidates_list.append(ip)
-
+                
+        if len(candidates_list) == 0:
+            return None
         return candidates_list[random.randint(0, len(candidates_list) - 1)]
 
     def calc_RTT(from_ip, to_ip):
@@ -123,7 +140,6 @@ class DDDFSNodesInfo(object):
             return conf.rtt_lan
         else:
             return conf.rtt_wan
-
 
 
 if __name__ == '__main__':

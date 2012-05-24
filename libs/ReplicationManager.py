@@ -6,16 +6,16 @@ sys.path.append(os.pardir)
 import thread, datetime, random
 
 from conf import conf
+import chooseDataNode
 
 def _define_replication_distination(data_nodes, cluster_info):
     """
 
     @param data_nodes data servers' list that have file contents now
-    @param cluster_info 
-    @return 
+    @param cluster_info information of cluster
+    @return ip of node chosen as a distination
     """
     cluster_dict = {}
-    print cluster_info.cluster_dict
 
     for cluster in cluster_info.cluster_dict.itervalues():
         cluster_dict[cluster] = 0
@@ -30,7 +30,8 @@ def _define_replication_distination(data_nodes, cluster_info):
     candidates = []
     min_replnum = 99999
 
-    print cluster_dict
+    # select clusters with minimam data contents now
+    # e.g.) candidates = ['huscs', 'hongo']
     for cluster, replnum in cluster_dict.iteritems():
         if min_replnum > replnum:
             min_replnum = replnum
@@ -38,7 +39,10 @@ def _define_replication_distination(data_nodes, cluster_info):
             candidates.append(cluster)
         elif min_replnum == replnum:
             candidates.append(cluster)
+
     selected_cluster = candidates[random.randint(0, len(candidates) - 1)]
+    if len(candidates) == 0:
+        return None
     
     return cluster_info.choose_datanode_in_cluster(selected_cluster, data_nodes)
 
@@ -76,7 +80,7 @@ class ReplicationManager(object):
         # log to visualize
 
 
-    def ReplInfoWhenOpen(self, f, f_dists, cluster_info):
+    def ReplInfoWhenOpen(self, filename, f_from, f_dists, cluster_info):
         """
         @thread-safty
         UNSAFE.
@@ -105,12 +109,13 @@ class ReplicationManager(object):
             for replToFrom in replInfo:
                 replicate(to=replToFrom['to'], from=replToFrom['from'])
         """
-        self._IncReplOpenCnt(f)
+        self._IncReplOpenCnt(filename)
         
         to_ip = _define_replication_distination(f_dists, cluster_info)
-        # for test, one datanode is selected at random
-        from_ip = f_dists[random.randint(0, len(f_dists) - 1)]
+        if to_ip == None:  # replication will not be happend
+            return None
 
+        from_ip = chooseDataNode.chooseDataNode(f_from, f_dists, cluster_info)
         return {'from': from_ip, 'to': to_ip}
 
     def ReplInfoWhenClose(self, f):
