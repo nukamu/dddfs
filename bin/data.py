@@ -17,11 +17,11 @@ import threading
 import random
 import atexit     # for leave from the list of data servers
 
-class DRDFSData(object):
-    """This is the class for DRDFS's data servers
+class DDDFSData(object):
+    """This is the class for DDDFS's data servers
     """
     def __init__(self, metaaddr, rootpath, dddfs_dir):
-        """initialize DRDFS's data server daemon
+        """initialize DDDFS's data server daemon
         """
         self.metaaddr = metaaddr
         self.rootpath = os.path.abspath(rootpath)
@@ -301,13 +301,13 @@ class DRDFSData(object):
                 f.write(buf)
                 write_size += len(buf)            
             f.close()
-            ans = (0, os.path.join(self.rootpath, filename))
+            ans = (0, filename)
             self.c_channel.send_header(ans)
             print "finish create replication and exit"
             sys.exit()
 
 def main(meta_addr, dir_path, dddfs_dir):
-    data = DRDFSData(meta_addr, dir_path, dddfs_dir)
+    data = DDDFSData(meta_addr, dir_path, dddfs_dir)
     atexit.register(data.finalize)
     data.run()
 
@@ -315,6 +315,6 @@ def main(meta_addr, dir_path, dddfs_dir):
 if __name__ == '__main__':
     if len(sys.argv) != 3:
         sys.exit("Usage: ")
-    data = DRDFSData(sys.argv[1], sys.argv[2])
+    data = DDDFSData(sys.argv[1], sys.argv[2])
     atexit.register(data.finalize)
     data.run()

@@ -19,3 +19,4 @@ rtt_wan=0.027
 rtt_lan=0.000017
 
 cluster_conf_file="slaves.conf"
+access_db_path="/tmp/accessLoad.sqlite"

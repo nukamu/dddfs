@@ -17,7 +17,7 @@ def _define_replication_distination(data_nodes, cluster_info):
     """
     cluster_dict = {}
 
-    for cluster in cluster_info.cluster_dict.itervalues():
+    for cluster in cluster_info.data_cluster_dict.iterkeys():
         cluster_dict[cluster] = 0
 
     for data_node in data_nodes:
@@ -80,7 +80,7 @@ class ReplicationManager(object):
         # log to visualize
 
 
-    def ReplInfoWhenOpen(self, filename, f_from, f_dists, cluster_info):
+    def ReplInfoWhenOpen(self, filename, f_dists, access_info, cluster_info):
         """
         @thread-safty
         UNSAFE.
@@ -115,9 +115,9 @@ class ReplicationManager(object):
         if to_ip == None:  # replication will not be happend
             return None
 
-        from_ip = chooseDataNode.chooseDataNode(f_from, f_dists, cluster_info)
+        from_ip = chooseDataNode.ChooseDataNode(filename, to_ip, f_dists, access_info, cluster_info)
         return {'from': from_ip, 'to': to_ip}
 
-    def ReplInfoWhenClose(self, f):
+    def ReplInfoWhenClose(self, f, dest, accessInfo):
         self._DecReplOpenCnt(f)
-
+        accessInfo.del_load(f, dest)

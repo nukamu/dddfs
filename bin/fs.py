@@ -188,19 +188,21 @@ class DRDFS(Fuse):
             self.path = path
             self.size = ans[3]
             path_data = ans[4]
+            self.created = ans[5]
             
             DRDFSLog.debug("This file size is %d bytes" % (self.size, ))
 
             self.d_channel = channel.DRDFSChannel()
             self.d_channel.connect(self.dist, conf.dataport)
 
-            print "nya"
             senddata = ['open', path_data, flags, mode]
             ans = self.d_channel.send_recv_flow(senddata)
             DRDFSLog.debug("open ans (from data)" + str(ans))
             if ans[0] != 0:
                 print "open error!!"
-                return
+                e = IOError()
+                e.errno = ans[0]
+                raise e
             self.datafd = ans[1]
 
             """Initialize the write buffer
@@ -361,7 +363,8 @@ class DRDFS(Fuse):
             self.bldata = None
             self.timedic = None
 
-            senddata = ['release', self.metafd, ans]
+            senddata = ['release', self.metafd, self.dist, 
+                        ans, self.path, self.created]
             
             ans = m_channel.send_recv_flow(senddata)
             return 0

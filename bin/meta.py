@@ -42,8 +42,9 @@ class DRDFSMeta(object):
         self.cluster_info = cluster.DDDFSNodesInfo(
             os.path.join(self.dddfs_dir, 'conf', conf.cluster_conf_file))
 
-        self.delfiles_dict = {}
-        self.delfiles_dict_lock = threading.Lock()
+        self.access_info = chooseDataNode.FileAccessInfo()
+
+        self.delfiles_q = Queue.Queue()
         self.datalist = []
         self.repq = Queue.Queue()
 
@@ -62,10 +63,9 @@ class DRDFSMeta(object):
         collector_thread.start()
         threads_count = 0
 
-        delete_files_thread = self.delete_files(self.delfiles_dict, 
-                                                self.delfiles_dict_lock)
+        delete_files_thread = self.delete_files(self.delfiles_q)
         delete_files_thread.start()
-        replicator_thread = self.replicator(self.repq)
+        replicator_thread = self.replicator(self.repq, self.access_info, self.rootpath)
         replicator_thread.start()
 
         while True:
@@ -73,9 +73,8 @@ class DRDFSMeta(object):
             c_channel = channel.DRDFSChannel()
             c_channel.set_channel_from_sock(csock)
             DRDFSLog.debug("accept connnect from %s" % (str(address[0])))
-            metad = self.handler(c_channel, self.rootpath, self.delfiles_dict, 
-                                 self.delfiles_dict_lock, self.datalist, self.repq, 
-                                 self.repl_info, self.cluster_info)
+            metad = self.handler(c_channel, self.rootpath, self.delfiles_q, self.datalist, self.repq, 
+                                 self.repl_info, self.access_info, self.cluster_info)
             threads_count += 1
             metad.start()
             daemons.append(metad)
@@ -87,22 +86,18 @@ class DRDFSMeta(object):
         
         @param files file list to delete
         """
-        def __init__(self, delfiles_dict, lock):
+        def __init__(self, delfiles_q):
             threading.Thread.__init__(self)
             self.setDaemon(True)
-            self.delfiles_dict = delfiles_dict
-            self.delfiles_dict_lock = lock
+            self.delfiles_q = delfiles_q
 
         def run(self, ):
             while True:
-                with self.delfiles_dict_lock:
-                    del_key_list = []
-                    for IP, files in self.delfiles_dict.iteritems():
-                        self.send_delete_request(IP, files)
-                        del_key_list.append(IP)
-                    for del_key in del_key_list:
-                        del self.delfiles_dict[del_key]
-                time.sleep(3)
+                try:
+                    (target_ip, target_file) = self.delfiles_q.get(timeout=3)
+                    self.send_delete_request(target_ip, [target_file, ])
+                except Queue.Empty:
+                    pass
 
         def send_delete_request(self, IP, files):
             senddata = ['filedel', files]
@@ -135,12 +130,14 @@ class DRDFSMeta(object):
     class replicator(threading.Thread):
         """Class for the thread making replica.
         """
-        def __init__(self, repq):
+        def __init__(self, repq, access_info, rootpath):
             threading.Thread.__init__(self)
             self.setDaemon(True)
             self.repq = repq
             self.sock_list =[]
             self.sock_dict = {}
+            self.access_info = access_info
+            self.rootpath = rootpath
 
         def run(self, ):
             while True:
@@ -167,11 +164,12 @@ class DRDFSMeta(object):
                     (ans, dist_filename, size)  = ch.recv_header()
                     if ans == 0:
                         # add new location of the file
-                        f = open(org_filename, 'a')
-                        buf = "%s,%s,%d,%s\n" % (new_dist, org_filename, size, org_dist)
+                        f = open(self.rootpath + org_filename, 'a')
+                        buf = "%s,%s,%d,%s\n" % (new_dist, dist_filename, size, org_dist)
                         f.write(buf)
                         f.close()
                         print "*** add replication ****"
+                        self.access_info.add_dest(org_filename, new_dist)
                     self.sock_list.remove(ch.sock.fileno())
                     del self.sock_dict[ch.sock.fileno()]
                     senddata = ['close', ]
@@ -182,18 +180,19 @@ class DRDFSMeta(object):
         """Class for thread created for each client
         This handler is run as multithread.
         """
-        def __init__(self, c_channel, rootpath, delfiles_dict, 
-                     delfiles_dict_lock, datalist, repq, 
-                     repl_info, cluster_info):
+        def __init__(self, c_channel, rootpath, delfiles_q, 
+                     datalist, repq, 
+                     repl_info, access_info, cluster_info):
             threading.Thread.__init__(self)
             self.setDaemon(True)
             self.c_channel = c_channel
             self.rootpath = rootpath
             self.datalist = datalist
-            self.delfiles_dict = delfiles_dict
-            self.delfiles_dict_lock = delfiles_dict_lock
+            self.delfiles_q = delfiles_q
             self.repq = repq
             self.repl_info = repl_info
+            
+            self.access_info = access_info
             self.cluster_info = cluster_info
 
         def run(self, ):
@@ -266,11 +265,11 @@ class DRDFSMeta(object):
                                header[2])
 
                 elif header[0] == 'open':
-                    self.open(self.rootpath + header[1],
-                              header[2], header[3])
+                    self.open(header[1], header[2], header[3])
 
                 elif header[0] == 'release':
-                    self.release(header[1], header[2])
+                    self.release(header[1], header[2], header[3], 
+                                 header[4], header[5])
 
                 elif header[0] == 'fgetattr':
                     self.fgetattr(header[1])
@@ -301,10 +300,10 @@ class DRDFSMeta(object):
             """
             ret = self.cluster_info.add_node(IP, cluster.NodeInfo.TYPE_DATA)
             self.c_channel.send_header(ret)
-            self.datalist.append(IP)
-
-            print "add data server IP:", IP
-            print "Now %d data servers are.." % len(self.datalist)
+            if ret == 0:
+                self.datalist.append(IP)
+                print "add data server IP:", IP
+                print "Now %d data servers are.." % len(self.datalist)
 
         def data_del(self, IP):
             """
@@ -385,14 +384,14 @@ class DRDFSMeta(object):
             DRDFSLog.debug(path)
             if os.path.isfile(path):
                 f = open(path, 'r')
-                buf = f.read()
+                while True:
+                    buf = f.readline()
+                    if buf == '':
+                        break
+                    l = buf.rsplit(',')
+                    self.delfiles_q.put((l[0], l[1]))
+                self.access_info.del_file(path)
                 f.close()
-                l = buf.rsplit(',')
-                with self.delfiles_dict_lock:
-                    if l[0] in self.delfiles_dict:
-                        self.delfiles_dict[l[0]].append(l[1])
-                    else:
-                        self.delfiles_dict[l[0]] = [l[1], ]
             try:
                 os.unlink(path)
                 senddata = 0
@@ -484,18 +483,17 @@ class DRDFSMeta(object):
             @param flag flags for open(2)
             @param mode open mode (may be empty tuple): actual value is mode[0]
             """
-            self.path = path
-            if os.access(path, os.F_OK) == True:
+            if os.access(self.rootpath + path, os.F_OK) == True:
                 """When the required file exist...
                 """
                 try:
                     DRDFSLog.debug("!!find the file %s w/ %o" % (path, flag))
-                    self.create_flag = False
+                    created = False
                     fd = 0
                     if mode:
-                        fd = os.open(path, os.O_RDWR, mode[0])
+                        fd = os.open(self.rootpath + path, os.O_RDWR, mode[0])
                     else:
-                        fd = os.open(path, os.O_RDWR)
+                        fd = os.open(self.rootpath + path, os.O_RDWR)
                         DRDFSLog.debug("fd = %d" % (fd))
                     data_buf = ""
                     while True:
@@ -514,22 +512,26 @@ class DRDFSMeta(object):
                         filename = l[1]
                         size = string.atol(l[2])
                     data_num = len(lines)
-                    peername = self.c_channel.sock.getpeername()
+                    peername = self.c_channel.sock.getpeername()[0]
 
-                    selected_ip = chooseDataNode.ChooseDataNode(peername, data_nodes, self.cluster_info)
-                    senddata = [0, selected_ip, fd, size, filename]
+                    print path
+                    dest = chooseDataNode.ChooseDataNode(path, peername, data_nodes, 
+                                                              self.access_info, self.cluster_info)
+                    senddata = [0, dest, fd, size, filename, created]
+                    self.access_info.add_load(path, dest)
                 except os.error, e:
                     DRDFSLog.debug("!!find the file but error for %s (%s)" % (path, e))
-                    senddata = [e.errno, 'null', 'null', 'null', 'null']
+                    senddata = [e.errno, None, None, None, None, None]
                 self.c_channel.send_header(senddata)
 
                 # do replication (if need)
-                repl_dict = self.repl_info.ReplInfoWhenOpen(path, peername, data_nodes, self.cluster_info)
+                repl_dict = self.repl_info.ReplInfoWhenOpen(path, data_nodes, 
+                                                            self.access_info, self.cluster_info)
                 if repl_dict != None:                   
                     # add a replication task
                     if conf.replication == True:
                         # select distination in replication
-                        self.repq.put((repl_dict['from'], file_dict[data_nodes[0]], repl_dict['to'], path))
+                        self.repq.put((repl_dict['from'], filename, repl_dict['to'], path))
                         print "task ***"
 
 
@@ -537,13 +539,13 @@ class DRDFSMeta(object):
                 """When the required file doesn't exist...
                 """
                 DRDFSLog.debug("can't find the file so create!!")
+                created = True
                 try:
-                    self.create_flag = True
                     fd = 0
                     if mode:
-                        fd = os.open(path, os.O_RDWR | os.O_CREAT, mode[0])
+                        fd = os.open(self.rootpath + path, os.O_RDWR | os.O_CREAT, mode[0])
                     else:
-                        fd = os.open(path, os.O_RDWR | os.O_CREAT)
+                        fd = os.open(self.rootpath + path, os.O_RDWR | os.O_CREAT)
                 except os.error, e:
                     print "!! have fatal error @1!! (%s)" % (e)
                     raise
@@ -569,12 +571,14 @@ class DRDFSMeta(object):
                 except os.error, e:
                     print "!! have fatal error @3!! (%s)" % (e)
                     raise
+                self.access_info.add_file(path, dist)
+                
                 size = 0
-                senddata = [0, dist, fd, size, filename]
+                senddata = [0, dist, fd, size, filename, created]
                 self.c_channel.send_header(senddata)
 
                 
-        def release(self, fd, fsize):
+        def release(self, fd, dest, fsize, filename, created):
             """release handler.
 
             @param fd file discripter
@@ -582,10 +586,11 @@ class DRDFSMeta(object):
             """
             os.lseek(fd, 0, os.SEEK_SET)
             DRDFSLog.debug("fd = " + str(fd))
-            if self.create_flag == False:
-                self.repl_info.ReplInfoWhenClose(self.path)
+            if created == False:
+                self.repl_info.ReplInfoWhenClose(filename, dest, 
+                                                 self.access_info)
 
-            if self.create_flag == True:
+            else:
                 try:
                     buf = os.read(fd, conf.bufsize)
                 except os.error, e:

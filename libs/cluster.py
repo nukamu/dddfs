@@ -76,6 +76,7 @@ class DDDFSNodesInfo(object):
     def __init__(self, config_path):
         self.cluster_dict = _parse_cluster_config(config_path)
 
+        self.meta_ip = ''
         self.data_ip_list = []
         self.client_ip_list = []
 
@@ -133,14 +134,13 @@ class DDDFSNodesInfo(object):
             return None
         return candidates_list[random.randint(0, len(candidates_list) - 1)]
 
-    def calc_RTT(from_ip, to_ip):
+    def calcRTT(self, from_ip, to_ip):
         """
         """
         if self.cluster_dict[from_ip] == self.cluster_dict[to_ip]:
             return conf.rtt_lan
         else:
             return conf.rtt_wan
-
 
 if __name__ == '__main__':
     import doctest
