@@ -1,6 +1,46 @@
-import thread
-import datetime
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
 
+import sys, os
+sys.path.append(os.pardir)
+import thread, datetime, random
+
+from conf import conf
+
+def _define_replication_distination(data_nodes, cluster_info):
+    """
+
+    @param data_nodes data servers' list that have file contents now
+    @param cluster_info 
+    @return 
+    """
+    cluster_dict = {}
+    print cluster_info.cluster_dict
+
+    for cluster in cluster_info.cluster_dict.itervalues():
+        cluster_dict[cluster] = 0
+
+    for data_node in data_nodes:
+        cluster_name = cluster_info.cluster_dict[data_node]
+        if not cluster_dict.has_key(cluster_name):
+            cluster_dict[cluster_name] = 1
+        else:
+            cluster_dict[cluster_name] += 1
+
+    candidates = []
+    min_replnum = 99999
+
+    print cluster_dict
+    for cluster, replnum in cluster_dict.iteritems():
+        if min_replnum > replnum:
+            min_replnum = replnum
+            candidates = []
+            candidates.append(cluster)
+        elif min_replnum == replnum:
+            candidates.append(cluster)
+    selected_cluster = candidates[random.randint(0, len(candidates) - 1)]
+    
+    return cluster_info.choose_datanode_in_cluster(selected_cluster, data_nodes)
 
 class ReplicationManager(object):
     """
@@ -14,19 +54,29 @@ class ReplicationManager(object):
     - Method to suggest replication removements is not implemented yet.
     """
 
-    def __init__():
-        # TODO: These data structures comsume O(f) space
+    def __init__(self, ):
         self.replOpenCnt = {}      # ex: replOpenCnt["some_file"] ->
                                    #       Total number of `open's for "some_file"
+        # database
 
-    def _IncReplOpenCnt(f):
+
+    def _IncReplOpenCnt(self, f):
         if not self.replOpenCnt.has_key(f):
-            self.replOpenCnt = 1
+            self.replOpenCnt[f] = 1
         else:
-            self.replOpenCnt += 1
+            self.replOpenCnt[f] += 1
+
+        # log to visualize
 
 
-    def GetNewReplInfoWhenOpen(f):
+    def _DecReplOpenCnt(self, f):
+        if self.replOpenCnt[f] > 0:
+            self.replOpenCnt[f] -= 1
+            
+        # log to visualize
+
+
+    def ReplInfoWhenOpen(self, f, f_dists, cluster_info):
         """
         @thread-safty
         UNSAFE.
@@ -56,5 +106,13 @@ class ReplicationManager(object):
                 replicate(to=replToFrom['to'], from=replToFrom['from'])
         """
         self._IncReplOpenCnt(f)
+        
+        to_ip = _define_replication_distination(f_dists, cluster_info)
+        # for test, one datanode is selected at random
+        from_ip = f_dists[random.randint(0, len(f_dists) - 1)]
 
-        # TODO: Determine replication request from location(f) and reqQ(f)
+        return {'from': from_ip, 'to': to_ip}
+
+    def ReplInfoWhenClose(self, f):
+        self._DecReplOpenCnt(f)
+

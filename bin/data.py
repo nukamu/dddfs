@@ -253,27 +253,29 @@ class DRDFSData(object):
 
         # for replication (required by metadata server)
         def replication(self, filename, to_addr):
-            # for test
-            filename = filename[:-4]
-
             to_channel = channel.DRDFSChannel()
             to_channel.connect(to_addr, conf.dataport)
 
             f = open(os.path.join(self.rootpath, filename), 'r')
             f_size = os.fstat(f.fileno()).st_size
-            filename = filename + 'test'
             senddata = ['recv_repl', filename, f_size]
             to_channel._send_header(senddata)
             send_size = 0
 
             while send_size < f_size:
                 buf = f.read(conf.blsize)
+                print len(buf)
                 to_channel.sock.sendall(buf)
                 send_size += len(buf)
             assert (send_size == f_size)
 
-            ans = 0
-            self.c_channel.send_header(ans)
+            print "finish send data of file"
+            (ans, dist_filename) = to_channel.recv_header()
+            print "recv answer"
+
+            if ans == 0:
+                ans = (0, dist_filename, f_size)
+                self.c_channel.send_header(ans)
             to_channel.brk_channel()
 
         # for replication (required by a data server)
@@ -285,11 +287,19 @@ class DRDFSData(object):
             f = open(os.path.join(self.rootpath, filename), 'w+')
             
             write_size = 0
+            print "replication will be created! size = %d" % (f_size)
             while write_size < f_size:
-                buf = self.c_channel._recvall(conf.blsize)
+                if (f_size - write_size) < conf.blsize:
+                    buf = self.c_channel._recvall(f_size - write_size)
+                else:
+                    buf = self.c_channel._recvall(conf.blsize)
+                print len(buf)
                 f.write(buf)
                 write_size += len(buf)            
             f.close()
+            ans = (0, os.path.join(self.rootpath, filename))
+            self.c_channel.send_header(ans)
+            print "finish create replication and exit"
             sys.exit()
 
 def main(meta_addr, dir_path):

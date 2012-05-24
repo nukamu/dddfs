@@ -7,7 +7,8 @@ import sys, os, os.path
 sys.path.append(os.pardir)
 
 # dddfs's original modules
-from libs import channel, dbmng, system
+from libs import channel, dbmng, system, cluster
+from libs import ReplicationManager
 from conf import conf
 from libs.system import DRDFSLog
 
@@ -16,34 +17,6 @@ import stat, errno
 import threading, Queue
 import socket, cPickle, select
 import random, string, re, time
-
-class DRDFSNodeInfo(object):
-
-    def __init__(self, IP, cluster):
-        self.IP = IP
-        self.cluster = cluster
-
-class DRDFSDataNodeInfo(DRDFSNodeInfo):
-    
-    def __init__(self, IP, cluster, dataPath):
-        DRDFSNode.__init__(IP, cluster)
-        self.load = 0
-             
-class DRDFSMetaDataInfo():
-    def __init__(self, ):
-        pass
-
-class DRDFSMetaFile():   
-    def __init__(self, path):
-        self.path = path
- 
-    def get_location(self, ):
-        pass
-
-    def update_info(self, ):
-        pass
-
-
 
 
 class DRDFSMeta(object):
@@ -61,7 +34,12 @@ class DRDFSMeta(object):
         DRDFSLog.init("meta", DRDFSLog.DEBUG)
         DRDFSLog.info("** DRDFS metadata server init **")
         DRDFSLog.debug("rootpath = " + self.rootpath)
-        
+
+        # for replication
+        if conf.replication == True:
+            self.cluster_info = cluster.DDDFSNodesInfo(conf.cluster_conf_path)
+            self.repl_info = ReplicationManager.ReplicationManager()
+
         self.delfiles_dict = {}
         self.delfiles_dict_lock = threading.Lock()
         self.datalist = []
@@ -94,7 +72,8 @@ class DRDFSMeta(object):
             c_channel.set_channel_from_sock(csock)
             DRDFSLog.debug("accept connnect from %s" % (str(address[0])))
             metad = self.handler(c_channel, self.rootpath, self.delfiles_dict, 
-                                 self.delfiles_dict_lock, self.datalist, self.repq)
+                                 self.delfiles_dict_lock, self.datalist, self.repq, 
+                                 self.repl_info, self.cluster_info)
             threads_count += 1
             metad.start()
             daemons.append(metad)
@@ -172,7 +151,7 @@ class DRDFSMeta(object):
                     senddata = ['do_repl', rep_filename, rep_to]
                     rep_ch.send_header(senddata)
                     self.sock_list.append(rep_ch.sock.fileno())
-                    self.sock_dict[rep_ch.sock.fileno()] = (rep_ch, org_filename, rep_to)
+                    self.sock_dict[rep_ch.sock.fileno()] = (rep_ch, org_filename, rep_from, rep_to)
                 except Queue.Empty:
                     pass
 
@@ -181,16 +160,13 @@ class DRDFSMeta(object):
                 for socknum in ch_list:
                     ch = self.sock_dict[socknum][0]
                     org_filename = self.sock_dict[socknum][1]
-                    new_dist = self.sock_dict[socknum][2]
-                    ans = ch.recv_header()
+                    org_dist = self.sock_dict[socknum][2]
+                    new_dist = self.sock_dict[socknum][3]
+                    (ans, dist_filename, size)  = ch.recv_header()
                     if ans == 0:
-                        # TODO: add new location of the file
-                        f = open(org_filename, 'r+')
-                        buf = f.read()
-                        l = buf.rsplit(',')
-                        buf = "%s:%s,%s,%s" % (l[0], new_dist, l[1], l[2])
-                        f.truncate(0)
-                        f.seek(0)
+                        # add new location of the file
+                        f = open(org_filename, 'a')
+                        buf = "%s,%s,%d,%s\n" % (new_dist, dist_filename, size, org_dist)
                         f.write(buf)
                         f.close()
                         print "*** add replication ****"
@@ -205,7 +181,8 @@ class DRDFSMeta(object):
         This handler is run as multithread.
         """
         def __init__(self, c_channel, rootpath, delfiles_dict, 
-                     delfiles_dict_lock, datalist, repq):
+                     delfiles_dict_lock, datalist, repq, 
+                     repl_info, cluster_info):
             threading.Thread.__init__(self)
             self.setDaemon(True)
             self.c_channel = c_channel
@@ -214,6 +191,8 @@ class DRDFSMeta(object):
             self.delfiles_dict = delfiles_dict
             self.delfiles_dict_lock = delfiles_dict_lock
             self.repq = repq
+            self.repl_info = repl_info
+            self.cluster_info = cluster_info
 
         def run(self, ):
             while True:
@@ -318,6 +297,7 @@ class DRDFSMeta(object):
         def data_add(self, IP):
             """
             """
+            self.cluster_info.add_node(IP, cluster.NodeInfo.TYPE_DATA)
             self.datalist.append(IP)
 
             print "add data server IP:", IP
@@ -347,14 +327,13 @@ class DRDFSMeta(object):
                 return
             if os.path.isfile(path):
                 f = open(path, 'r')
-                buf = f.read()
+                buf = f.readline()
                 f.close()
                 l = buf.rsplit(',')
                 try:
                     senddata = [0, st, string.atol(l[2])]
                 except Exception, e:
                     print "len(l) = %d" % (len(l))
-                    print l
                     raise
             else:
                 senddata = [0, st, -1]
@@ -454,14 +433,32 @@ class DRDFSMeta(object):
             DRDFSLog.debug("path = %s, len = %d" % (path, len))
             try:
                 f = open(path, 'r+')
-                buf = f.read()
-                l = buf.rsplit(',')
-                buf = "%s,%s,%s" % (l[0], l[1], str(len))
+                filedist_info_list = []
+                while True:
+                    # read original data
+                    buf = f.readline()
+                    if buf == '':  # EOF
+                        break
+                    l = buf.rsplit(',')
+                    if len(l) == 3:
+                        filedist_info_list.append((l[0], l[1]))          
+                    elif len(l) == 4:
+                        filedist_info_list.append((l[0], l[1], l[3]))
+                    else: 
+                        break
                 f.truncate(0)
                 f.seek(0)
-                f.write(buf)
+
+                for filedist_info in filedist_info_list:
+                    dist = filedist_info[0]
+                    filename = filedist_info[1]
+                    if len(filedist_info) == 2:
+                        filesource = ''
+                    else: 
+                        filesource = filedist_info[2]
+                    f.write("%s,%s,%d,%s\n" % (dist, filename, len, filesource))
                 f.close()
-                senddata = [0, l[0], l[1]]
+                senddata = [0, filedist_info_list]
             except IOError, e:
                 senddata = [e.errno, ]
             except Exception, e:
@@ -484,37 +481,58 @@ class DRDFSMeta(object):
             @param flag flags for open(2)
             @param mode open mode (may be empty tuple): actual value is mode[0]
             """
+            self.path = path
             if os.access(path, os.F_OK) == True:
                 """When the required file exist...
                 """
                 try:
                     DRDFSLog.debug("!!find the file %s w/ %o" % (path, flag))
+                    self.create_flag = False
                     fd = 0
                     if mode:
                         fd = os.open(path, os.O_RDWR, mode[0])
                     else:
                         fd = os.open(path, os.O_RDWR)
                         DRDFSLog.debug("fd = %d" % (fd))
-                    buf = os.read(fd, conf.bufsize)
-                    l = buf.rsplit(',')
-                    dist_l = l[0].rsplit(':')
-                    dist = dist_l[0]
-                    filename = l[1]
-                    size = string.atol(l[2])
-                    senddata = [0, dist, fd, size, filename]
+                    data_buf = ""
+                    while True:
+                        buf = os.read(fd, conf.bufsize)
+                        if buf == '':
+                            break
+                        data_buf += buf
+                    lines = data_buf.rsplit('\n')
+                    data_nodes = []
+                    file_dict = {}
+                    for line in lines:
+                        l = line.rsplit(',')
+                        print l
+                        if len(l) < 2:
+                            break
+                        data_nodes.append(l[0])
+                        file_dict[l[0]] = l[1]
+                        size = string.atol(l[2])
+                    print lines
+                    senddata = [0, data_nodes[0], fd, size, file_dict[data_nodes[0]]]
 
-                    # add a replication task (now for test)
+                    repl_dict = self.repl_info.ReplInfoWhenOpen(path, data_nodes, self.cluster_info)
+                    
+                    # add a replication task
                     if conf.replication == True:
-                        self.repq.put((dist, filename + "test", dist, path))
+                        # select distination in replication
+                        self.repq.put((repl_dict['from'], file_dict[data_nodes[0]], repl_dict['to'], path))
                         print "task ***"
+
                 except os.error, e:
                     DRDFSLog.debug("!!find the file but error for %s (%s)" % (path, e))
                     senddata = [e.errno, 'null', 'null', 'null', 'null']
                 self.c_channel.send_header(senddata)
 
             else:
+                """When the required file doesn't exist...
+                """
                 DRDFSLog.debug("can't find the file so create!!")
                 try:
+                    self.create_flag = True
                     fd = 0
                     if mode:
                         fd = os.open(path, os.O_RDWR | os.O_CREAT, mode[0])
@@ -534,7 +552,7 @@ class DRDFSMeta(object):
                     # make a filename in a random manner
                     filename = ''.join(random.choice(string.letters) for i in xrange(16))
                     DRDFSLog.debug("filename is %s" % (filename,))
-                    buf = dist + ',' + filename + ',' + '0'
+                    buf = dist + ',' + filename + ',' + '0,' + '\n'
                 except Exception, e:
                     print "!! have fatal error @2!! (%s)" % (e)
                     raise
@@ -558,16 +576,18 @@ class DRDFSMeta(object):
             """
             os.lseek(fd, 0, os.SEEK_SET)
             DRDFSLog.debug("fd = " + str(fd))
-            try:
-                buf = os.read(fd, conf.bufsize)
-            except os.error, e:
-                print "OSError in release (%s)" %(e)
-            l = buf.rsplit(',')
+            if self.create_flag == False:
+                self.repl_info.ReplInfoWhenClose(self.path)
 
-            size = string.atol(l[2])
-            if size != fsize:
+            if self.create_flag == True:
                 try:
-                    buf = l[0] + ',' + l[1] + ',' + str(fsize)
+                    buf = os.read(fd, conf.bufsize)
+                except os.error, e:
+                    print "OSError in release (%s)" %(e)
+                l = buf.rsplit(',')
+                size = string.atol(l[2])
+                try:
+                    buf = l[0] + ',' + l[1] + ',' + str(fsize) + ',\n'
                     DRDFSLog.debug("write to meta file %s" % buf)
                     
                     os.ftruncate(fd, len(buf))

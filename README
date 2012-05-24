@@ -1,17 +1,24 @@
 This directory contains the dddfs that is a distributed file system. 
 
 written by Miki Horiuchi <mikity@logos.ic.i.u-tokyo.ac.jp>
-(3 Mar. 2012)
+Created: 3 Mar. 2012
+Last Modified: 22 May 2012
 
 == INSTALL ==
 
 == HOW TO USE ==
 [metadata server]
- % dddfs --meta [dir to manage metadata]
-
+ % dddfs --meta [meta_dir]
+meta_dir: path of directory to manage metadata
 
 [servers]
+ % dddfs --server --meta_addr [meta_addr] [data_dir]
+meta_addr: IP or hostname of metadata server
+data_dir: path of directory to manage data
 
 [clients]
+ % dddfs --client --meta_addr [meta_addr] [mount_point]
+meta_addr: IP or hostname of metadata server
+mount_point: path of directory to mount dddfs to
 
 == UNMOUNT ==

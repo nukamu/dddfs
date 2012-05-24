@@ -1,26 +1,20 @@
 FETCH_COST_ULIMIT = 9999999999
 
 
-class IntermediateNodeInfo(NodeInfo):
-    def __init__(IP, cluster, ):
-        NodeInfo(IP, cluster)
-
-
 def _FetchCost(latency, load):
     cost = latency * load
     assert(cost < FETCH_COST_ULIMIT)
     return cost
 
-
-def _ChooseBestDataNode(intermediateNodeToFetchTargetFile,
-                        dataNodeCandidates, clustersInfo):
+def _ChooseBestDataNode(nodes_info, dataNodeCandidates, clustersInfo):
     minCost = FETCH_COST_ULIMIT
     minCostIdx = -1
 
     # Search dataNode with minimum fetching cost
     for idx, dataNodeCandidate in enumerate(dataNodeCandidates):
         candidateCluster = clusterInfos[dataNodeCandidates.cluster]
-        rtt = intermediateNodeToFetchTargetFile.cluster.RTT[candidateCluster]
+
+        #rtt = intermediateNodeToFetchTargetFile.cluster.RTT[candidateCluster]
         cost = _FetchCost(rtt, dataNode.load)
         if cost < minCost:
             minCost = cost

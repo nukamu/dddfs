@@ -133,16 +133,19 @@ class DRDFS(Fuse):
         ans = m_channel.send_recv_flow(senddata)
         if ans[0] != 0:
             return -ans[0]
-        dist = ans[1]
-        filename = ans[2]
+        ans[1] = filedist_info_list
         DRDFSLog.debug("send request to data server: path=%s, len=%d" % (path, len)) 
-        senddata = ['truncate', filename, len]
-        ch = channel.DRDFSChannel()
-        ch.connect(dist, conf.dataport)
-        ans = ch.send_recv_flow(senddata)
-        ch.brk_channel()
-
-        return -ans
+        for filedist_info in filedist_info_list:
+            dist = filedist_info[0]
+            filename = filedist_info[1]
+            senddata = ['truncate', filename, len]
+            ch = channel.DRDFSChannel()
+            ch.connect(dist, conf.dataport)
+            ans = ch.send_recv_flow(senddata)
+            ch.brk_channel()
+            if ans != 0:
+                return -ans
+        return 0
 
     def mknod(self, path, mode, dev):
         DRDFSLog.debug("** mknod **")
