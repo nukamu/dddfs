@@ -1,0 +1,59 @@
+* 概要
+  このディレクトリにはDDDFSという名前の分散ファイルシステムのコードが含まれている．
+
+  作成者：堀内美希 <mikity@logos.ic.i.u-tokyo.ac.jp>
+  作成日時：2012年3月13日
+  最終更新日時：2012年5月25日
+
+* インストール
+** 必要ライブラリ
+   - FUSE
+   - python-fuse
+   例として，Debian系のディストリビューションでのインストール方法を示す．
+   #+BEGIN_SRC sh
+# apt-get install fuse
+# apt-get install python-fuse
+   #+END_SRC
+   できる．
+
+*** 参考
+    - FUSE :: http://fuse.sourceforge.net/
+    - python-fuse :: http://pypi.python.org/pypi/fuse-python
+
+** PATHの設定
+   bin/ にPATHを通す必要がある．
+
+* 使用方法
+  - メタデータサーバ
+  - データサーバ
+  - クライアント
+  の3種類のコンポーネントが協調し動作する．
+  *データサーバ，クライアント用プログラムは，メタデータサーバ立ち上げの後に行わなければならない．*
+
+** メタデータサーバ
+   #+BEGIN_SRC sh
+$ dddfs --meta /path/to/metadata/dir
+   #+END_SRC
+   これによりメタデータサーバ用デーモンが立ち上がる．
+
+** データサーバ
+   #+BEGIN_SRC sh
+$ dddfs --server --meta_addr METADATA_SERVER_HOSTNAME /path/to/data/dir
+   #+END_SRC
+   これによりデータサーバ用デーモンが立ち上がる．
+
+** クライアント
+   #+BEGIN_SRC sh
+$ dddfs --client --meta_addr METADATA_SERVER_HOSTNAME /path/to/mount/dir [fuse options]
+   #+END_SRC
+   これによりdddfs用デーモンが立ち上がって，/path/to/mount/dir 以下のアクセスをハンドルする．
+
+* 停止方法
+  DDDFSをマウントしたディレクトリをアンマウントするには，
+  #+BEGIN_SRC sh
+$ fusermount -u /path/to/mount/dir
+  #+END_SRC
+  というコマンドを打つ必要がある．
+  その際このディレクトリがいずれかのプロセスからアクセスしている状態だと，
+  device is busyでエラーになることがあるので注意．
+  メタデータサーバのデーモンと，データサーバのデーモンは自分で ctrl-c もしくは，kill する必要がある．

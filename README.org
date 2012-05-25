@@ -1,0 +1,58 @@
+* What's this?
+  This repository includes codes of a distributed file system named DDDFS.
+
+  Author: Miki Horiuchi <mikity@logos.ic.i.u-tokyo.ac.jp>
+  Created Date: 3/13/2012/
+  Last Update: 5/25/2012
+
+* Installation
+** Requirements
+   - FUSE
+   - python-fuse
+   They might be install using packaging systems of your distributions.
+   The example with Debian are as follows:
+   #+BEGIN_SRC sh
+# apt-get install fuse
+# apt-get install python-fuse
+   #+END_SRC
+
+*** References
+    - FUSE :: http://fuse.sourceforge.net/
+    - python-fuse :: http://pypi.python.org/pypi/fuse-python
+
+** PATH Configuration
+   Add bin/ of this repository to PATH environmental variable.
+
+* Usage
+  DDDFS works with three components:
+  - Metadata server
+  - Data servers
+  - Clients
+  *Data servers and clients must be run after a metadata server has been activated.*
+
+** Metadata Server
+   #+BEGIN_SRC sh
+$ dddfs --meta /path/to/metadata/dir
+   #+END_SRC
+   This starts the metadata server daemon.
+
+** Data Servers
+   #+BEGIN_SRC sh
+$ dddfs --server --meta_addr METADATA_SERVER_HOSTNAME /path/to/data/dir
+   #+END_SRC
+   This starts a data server daemon.
+
+** Clients
+   #+BEGIN_SRC sh
+$ dddfs --client --meta_addr METADATA_SERVER_HOSTNAME /path/to/mount/dir [fuse options]
+   #+END_SRC
+   This starts a DDDFS client daemon and mounts /path/to/mount/dir.
+
+* Stopping DDDFS
+  To unmount /path/to/mount/dir:
+  #+BEGIN_SRC sh
+$ fusermount -u /path/to/mount/dir
+  #+END_SRC
+
+  Umount can be failed with "device is busy" kinds of errors if any other process accesses /path/to/mount/dir.
+  Kill the metadata server daemon and data server daemons by sending SIGINT.
