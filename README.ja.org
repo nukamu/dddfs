@@ -2,7 +2,9 @@
   このディレクトリにはDDDFSという名前の分散ファイルシステムのコードが含まれている．
 
   作成者：堀内美希 <mikity@logos.ic.i.u-tokyo.ac.jp>
+
   作成日時：2012年3月13日
+
   最終更新日時：2012年5月25日
 
 * インストール
@@ -14,7 +16,6 @@
 # apt-get install fuse
 # apt-get install python-fuse
    #+END_SRC
-   できる．
 
 *** 参考
     - FUSE :: http://fuse.sourceforge.net/
