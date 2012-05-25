@@ -1,8 +1,10 @@
+#+OPTIONS: \n:nil
+
 * What's this?
   This repository includes codes of a distributed file system named DDDFS.
 
   Author: Miki Horiuchi <mikity@logos.ic.i.u-tokyo.ac.jp>
-  Created Date: 3/13/2012/
+  Created Date: 3/13/2012
   Last Update: 5/25/2012
 
 * Installation
