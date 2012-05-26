@@ -37,8 +37,7 @@ class DRDFSMeta(object):
         DRDFSLog.debug("rootpath = " + self.rootpath)
 
         # for replication
-        if conf.replication == True:
-            self.repl_info = ReplicationManager.ReplicationManager()
+        self.repl_info = ReplicationManager.ReplicationManager()
         self.cluster_info = cluster.DDDFSNodesInfo(
             os.path.join(self.dddfs_dir, 'conf', conf.cluster_conf_file))
 
@@ -67,6 +66,8 @@ class DRDFSMeta(object):
         delete_files_thread.start()
         replicator_thread = self.replicator(self.repq, self.access_info, self.rootpath)
         replicator_thread.start()
+        delete_replica_thread = self.del_repl(self.repl_info, self.delfiles_q, self.rootpath)
+        delete_replica_thread.start()
 
         while True:
             (csock, address) = self.lsock.accept()
@@ -175,6 +176,40 @@ class DRDFSMeta(object):
                     senddata = ['close', ]
                     ch.send_header(senddata)
                     ch.brk_channel()
+
+    class del_repl(threading.Thread):
+        """Class for the thread to delete replica.
+        """
+        def __init__(self, repl_info, delfiles_q, rootpath):
+            threading.Thread.__init__(self)
+            self.setDaemon(True)
+            self.repl_info = repl_info
+            self.delfiles_q = delfiles_q
+            self.rootpath = rootpath
+
+        def run(self, ):
+            last_access_time = self.repl_info.last_access_time
+            repl_num_dict = self.repl_info.replNum
+
+            while True:
+                # check tasks of deleting replica
+                for filename, last_access in last_access_time.iteritems():
+                    if time.time() - last_access > conf.repl_delete_time:
+                        if repl_num_dict[filename] == 1:
+                            last_access_time[filename] = time.time()
+                            continue
+                        org_size = os.path.getsize(self.rootpath + filename)
+                        f = open(self.rootpath + filename, 'r+')
+                        lines = f.readlines()
+                        if len(lines) > 1:
+                            f.truncate(org_size - len(lines[-1]))
+                            l = lines[-1].rsplit(",")
+                            if len(l) >= 2:
+                                self.delfiles_q.put((l[0], l[1]))
+                        f.close()
+                        last_access_time[filename] = time.time()
+                time.sleep(5)
+
 
     class handler(threading.Thread):
         """Class for thread created for each client

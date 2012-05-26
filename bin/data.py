@@ -4,7 +4,7 @@
 import os, sys, os.path
 sys.path.append(os.pardir)
 
-from libs import channel
+from libs import channel, system
 from libs.system import DRDFSLog
 from conf import conf
 
